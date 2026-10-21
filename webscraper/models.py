@@ -60,14 +60,21 @@ class ScrapeSession:
     created_at: datetime = field(default_factory=utcnow)
 
     @property
-    def success_count(self) -> int:
-        return sum(1 for p in self.pages if p.ok)
+    def documents(self) -> list[ScrapedPage]:
+        """Pages that were actually scraped. Failed fetches stay in storage for
+        diagnostics but are not shown, exported or summarized."""
+        return [p for p in self.pages if p.ok]
 
-    def to_dict(self) -> dict[str, Any]:
+    @property
+    def success_count(self) -> int:
+        return len(self.documents)
+
+    def to_dict(self, include_failed: bool = False) -> dict[str, Any]:
+        pages = self.pages if include_failed else self.documents
         return {
             "id": self.id,
             "keyword": self.keyword,
             "provider": self.provider,
             "created_at": self.created_at.isoformat(),
-            "pages": [p.to_dict() for p in self.pages],
+            "pages": [p.to_dict() for p in pages],
         }

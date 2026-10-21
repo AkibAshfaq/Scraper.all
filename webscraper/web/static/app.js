@@ -9,6 +9,9 @@ const state = {
   sessions: [],
   session: null,        // full session currently open
   rank: null,           // rank of the document open in the reader
+  view: "docs",         // "docs" | "chat"
+  chats: new Map(),     // session id -> [{role, content, pending?, error?}]
+  chatAbort: null,      // AbortController of the reply being streamed
   config: null,
 };
 
@@ -121,7 +124,7 @@ function renderSessions() {
           onclick: () => go(s.id),
         },
           el("span", { class: "kw" }, s.keyword),
-          el("span", { class: "sub" }, `${s.page_count} documents · ${fmtDate(s.created_at)}`),
+          el("span", { class: "sub" }, `${s.page_count} document${s.page_count === 1 ? "" : "s"} · ${fmtDate(s.created_at)}`),
         ),
       ),
     );
@@ -131,6 +134,7 @@ function renderSessions() {
 // ---------- session view ----------
 
 async function openSession(id, rank = null) {
+  if (state.session?.id !== id) stopChat();
   try {
     state.session = await api(`/api/sessions/${encodeURIComponent(id)}`);
   } catch (err) {
@@ -158,23 +162,41 @@ function renderSession() {
     s.keyword,
     el("span", { class: `badge ${s.store}` }, s.store === "saved" ? "Saved" : "Temporary"),
   );
+  const n = s.pages.length;
   $("session-meta").textContent =
-    `${s.success_count} of ${s.pages.length} pages scraped · via ${s.provider} · ${fmtDate(s.created_at)}`;
+    `${n} document${n === 1 ? "" : "s"} · via ${s.provider} · ${fmtDate(s.created_at)}`;
+  $("docs-count").textContent = n;
   $("save-btn").hidden = s.store !== "staged";
   $("discard-btn").hidden = s.store !== "staged";
+  $("summary-btn").hidden = !state.config?.chat_enabled;
+  $("tab-chat").hidden = !state.config?.chat_enabled;
   $("dl-json").href = `/api/sessions/${s.id}/export?format=json`;
   $("dl-csv").href = `/api/sessions/${s.id}/export?format=csv`;
   renderDocs();
+  setView(state.view);
+}
+
+function setView(view, focus = false) {
+  if (!state.config?.chat_enabled) view = "docs";
+  state.view = view;
+  for (const tab of document.querySelectorAll(".vtab")) {
+    tab.setAttribute("aria-selected", String(tab.dataset.view === view));
+  }
+  $("docs-pane").hidden = view !== "docs";
+  $("chat-pane").hidden = view !== "chat";
+  if (view === "chat") {
+    renderChat();
+    if (focus) $("chat-input").focus();
+  }
 }
 
 function renderDocs() {
   const s = state.session;
   const filter = $("filter").value.trim().toLowerCase();
-  const hideFailed = $("hide-failed").checked;
   const words = terms();
 
+  // The API only returns successfully scraped pages; failed fetches aren't shown.
   const visible = s.pages.filter((p) => {
-    if (hideFailed && p.error) return false;
     if (!filter) return true;
     return [p.title, p.search_title, p.url, p.description, p.search_snippet, p.content]
       .some((field) => (field || "").toLowerCase().includes(filter));
@@ -186,16 +208,14 @@ function renderDocs() {
       el("li", {},
         el("button", {
           type: "button",
-          class: p.error ? "doc failed" : "doc",
+          class: "doc",
           "aria-current": String(p.rank === state.rank),
           onclick: () => go(s.id, p.rank),
         },
           el("span", { class: "rank" }, p.rank),
           el("span", { class: "title" }, highlight(p.title || p.search_title || p.url, words)),
           el("span", { class: "url" }, p.url),
-          p.error
-            ? el("span", { class: "err" }, `Not scraped: ${p.error}`)
-            : el("span", { class: "snippet" }, highlight(p.description || p.search_snippet || p.content.slice(0, 240), words)),
+          el("span", { class: "snippet" }, highlight(p.description || p.search_snippet || p.content.slice(0, 240), words)),
         ),
       ),
     ),
@@ -224,8 +244,6 @@ function openDoc(rank) {
   const href = safeHref(page.url);
   if (href) link.href = href; else link.removeAttribute("href");
 
-  $("reader-error").hidden = !page.error;
-  $("reader-error").textContent = page.error ? `This page could not be scraped: ${page.error}` : "";
   $("reader-desc").replaceChildren(...highlight(page.description || page.search_snippet, words));
 
   const paragraphs = (page.content || "").split(/\n+/).filter(Boolean);
@@ -247,6 +265,206 @@ function openDoc(rank) {
     ),
   );
   $("reader").querySelector(".reader-body").scrollTop = 0;
+}
+
+// ---------- AI chat ----------
+
+const SUGGESTIONS = [
+  "What are the key facts and figures?",
+  "Where do the sources disagree?",
+  "Explain this topic to a beginner.",
+];
+
+function chatFor(id) {
+  if (!state.chats.has(id)) state.chats.set(id, []);
+  return state.chats.get(id);
+}
+
+function renderChat() {
+  const s = state.session;
+  if (!s) return;
+  const messages = chatFor(s.id);
+  const busy = Boolean(state.chatAbort);
+
+  $("chat-empty").hidden = messages.length > 0;
+  $("chat-clear").hidden = messages.length === 0 || busy;
+  $("chat-send").textContent = busy ? "Stop" : "Send";
+  $("chat-send").classList.toggle("danger-quiet", busy);
+  $("chat-send").classList.toggle("primary", !busy);
+  $("summarize-btn").disabled = busy;
+
+  const log = $("chat-log");
+  const stickToBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.replaceChildren(...messages.map(renderMessage));
+  if (stickToBottom || busy) log.scrollTop = log.scrollHeight;
+}
+
+function renderMessage(m) {
+  if (m.role === "user") {
+    return el("div", { class: `msg user${m.error ? " failed" : ""}` }, el("div", { class: "bubble" }, m.content));
+  }
+  const body = el("div", { class: "bubble md" });
+  if (m.content) body.append(renderMarkdown(m.content));
+  if (m.pending && !m.content) body.append(el("span", { class: "typing" }, "Reading the documents", el("i"), el("i"), el("i")));
+  if (m.stopped) body.append(el("p", { class: "muted small" }, "Stopped."));
+  if (m.error) body.append(el("p", { class: "error-box" }, m.error));
+  return el("div", { class: "msg assistant" }, el("span", { class: "avatar", "aria-hidden": "true" }, "✦"), body);
+}
+
+let renderQueued = false;
+function scheduleChatRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderChat();
+  });
+}
+
+async function sendChat(text) {
+  const s = state.session;
+  text = text.trim();
+  if (!s || !text || state.chatAbort) return;
+  setView("chat");
+
+  const messages = chatFor(s.id);
+  const question = { role: "user", content: text };
+  const reply = { role: "assistant", content: "", pending: true };
+  messages.push(question, reply);
+  $("chat-input").value = "";
+  autoGrow();
+
+  const controller = new AbortController();
+  state.chatAbort = controller;
+  renderChat();
+
+  // History sent to the server: completed turns only (failed ones are dropped).
+  const history = messages
+    .filter((m) => m !== reply && !m.error && m.content)
+    .map(({ role, content }) => ({ role, content }));
+
+  try {
+    const resp = await fetch(`/api/sessions/${encodeURIComponent(s.id)}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(errorText(data) || `Chat failed (${resp.status})`);
+    }
+    await readEvents(resp, (event) => {
+      if (event.type === "text") {
+        reply.content += event.text;
+        scheduleChatRender();
+      } else if (event.type === "error") {
+        throw new Error(event.message);
+      }
+    });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      reply.stopped = true;
+      if (!reply.content) question.error = true;
+    } else {
+      reply.error = err.message;
+      question.error = true;
+    }
+  } finally {
+    reply.pending = false;
+    if (state.chatAbort === controller) state.chatAbort = null;
+    if (state.session?.id === s.id) renderChat();
+  }
+}
+
+// Reads a newline-delimited JSON stream, calling onEvent for each line.
+async function readEvents(resp, onEvent) {
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
+  }
+  if (buffer.trim()) onEvent(JSON.parse(buffer));
+}
+
+function stopChat() {
+  state.chatAbort?.abort();
+}
+
+function autoGrow() {
+  const box = $("chat-input");
+  box.style.height = "auto";
+  box.style.height = `${Math.min(box.scrollHeight, 180)}px`;
+  box.style.overflowY = box.scrollHeight > 180 ? "auto" : "hidden";
+}
+
+// Minimal Markdown -> DOM (headings, lists, paragraphs, bold/italic/code,
+// [#N] citations). Builds nodes directly so nothing is parsed as HTML.
+function renderMarkdown(src) {
+  const frag = document.createDocumentFragment();
+  let para = [];
+  let list = null;
+  const flush = () => {
+    if (para.length) frag.append(el("p", {}, inline(para.join(" "))));
+    para = [];
+  };
+  for (const raw of src.replace(/\r/g, "").split("\n")) {
+    const line = raw.trim();
+    let m;
+    if (!line) { flush(); list = null; continue; }
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) {
+      flush(); list = null;
+      frag.append(el(`h${Math.min(m[1].length + 2, 6)}`, {}, inline(m[2])));
+    } else if ((m = line.match(/^([-*•]|\d+[.)])\s+(.*)$/))) {
+      flush();
+      const ordered = /\d/.test(m[1]);
+      if (!list || list.ordered !== ordered) {
+        list = { ordered, node: el(ordered ? "ol" : "ul") };
+        frag.append(list.node);
+      }
+      list.node.append(el("li", {}, inline(m[2])));
+    } else if (/^([-*_])\1{2,}$/.test(line)) {
+      flush(); list = null;
+      frag.append(el("hr"));
+    } else if (line.startsWith(">")) {
+      flush(); list = null;
+      frag.append(el("blockquote", {}, inline(line.replace(/^>\s?/, ""))));
+    } else {
+      list = null;
+      para.push(line);
+    }
+  }
+  flush();
+  return frag;
+}
+
+function inline(text) {
+  const re = /(\*\*[^*]+\*\*|`[^`]+`|\[#\d+(?:\s*,\s*#?\d+)*\]|\*[^*\s][^*]*\*)/g;
+  return text.split(re).map((part, i) => {
+    if (i % 2 === 0) return part;
+    if (part.startsWith("**")) return el("strong", {}, part.slice(2, -2));
+    if (part.startsWith("`")) return el("code", {}, part.slice(1, -1));
+    if (part.startsWith("[#")) return el("span", { class: "cites" }, part.match(/\d+/g).map((n) => cite(Number(n))));
+    return el("em", {}, part.slice(1, -1));
+  });
+}
+
+function cite(rank) {
+  const s = state.session;
+  const page = s?.pages.find((p) => p.rank === rank);
+  if (!page) return el("span", { class: "cite static" }, rank);
+  return el("button", {
+    type: "button",
+    class: "cite",
+    title: page.title || page.url,
+    onclick: () => go(s.id, rank),
+  }, rank);
 }
 
 // ---------- routing: #/s/<session id>[/<rank>] ----------
@@ -329,6 +547,8 @@ async function onDiscard() {
   if (!confirm(`Discard the temporary search “${s.keyword}”? Its data will be deleted.`)) return;
   try {
     await api(`/api/sessions/${s.id}`, { method: "DELETE" });
+    stopChat();
+    state.chats.delete(s.id);
     state.session = null;
     await loadSessions();
     go(null);
@@ -346,7 +566,34 @@ async function init() {
   $("discard-btn").addEventListener("click", onDiscard);
   $("reader-close").addEventListener("click", () => go(state.session.id));
   $("filter").addEventListener("input", () => { renderDocs(); openDoc(state.rank); });
-  $("hide-failed").addEventListener("change", renderDocs);
+  document.querySelectorAll(".vtab").forEach((tab) =>
+    tab.addEventListener("click", () => setView(tab.dataset.view, true)),
+  );
+  $("summary-btn").addEventListener("click", () => {
+    setView("chat", true);
+    if (!chatFor(state.session.id).length) sendChat(state.config.summary_prompt);
+  });
+  $("summarize-btn").addEventListener("click", () => sendChat(state.config.summary_prompt));
+  $("chat-suggestions").replaceChildren(
+    ...SUGGESTIONS.map((q) => el("button", { type: "button", class: "chip", onclick: () => sendChat(q) }, q)),
+  );
+  $("chat-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (state.chatAbort) stopChat();
+    else sendChat($("chat-input").value);
+  });
+  $("chat-input").addEventListener("input", autoGrow);
+  $("chat-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      $("chat-form").requestSubmit();
+    }
+  });
+  $("chat-clear").addEventListener("click", () => {
+    state.chats.delete(state.session.id);
+    renderChat();
+    $("chat-input").focus();
+  });
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.addEventListener("click", () => {
       state.store = tab.dataset.store;
@@ -362,6 +609,7 @@ async function init() {
     state.config = await api("/api/config");
     $("provider-line").textContent = `Search providers: ${state.config.provider.split(",").join(" → ")}`;
     $("version").textContent = `v${state.config.version}`;
+    $("chat-model").textContent = state.config.chat_model;
   } catch {
     // UI still works without config; hints fall back to defaults.
   }

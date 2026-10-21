@@ -78,8 +78,14 @@ def cmd_search(app: Container, args: argparse.Namespace) -> int:
     if not session.pages:
         print("No results found.")
         return 1
+    if not session.documents:
+        app.sessions.discard(session.id)
+        print(f"Found {len(session.pages)} results, but none of the pages could be scraped. Try again later.")
+        return 1
 
-    print(f"\nScraped {session.success_count}/{len(session.pages)} pages (results from {session.provider}).")
+    skipped = len(session.pages) - session.success_count
+    note = f", {skipped} skipped (could not be fetched)" if skipped else ""
+    print(f"\nScraped {session.success_count} documents{note} (results from {session.provider}).")
     print(f"Staged in temporary DB as session {session.id}")
     print(f"Exported to {app.sessions.export(session, args.format)}")
 
@@ -145,9 +151,8 @@ COMMANDS = {
 
 
 def _print_page(page: ScrapedPage) -> None:
-    status = "ok " if page.ok else "ERR"
-    detail = page.title if page.ok else page.error
-    print(f"  [{status}] #{page.rank:<2} {page.url}\n         {(detail or '')[:100]}")
+    if page.ok:
+        print(f"  #{page.rank:<2} {page.url}\n      {page.title[:100]}")
 
 
 def _print_sessions(rows: list[SessionSummary], empty: str) -> None:
@@ -155,7 +160,7 @@ def _print_sessions(rows: list[SessionSummary], empty: str) -> None:
         print(empty)
         return
     for r in rows:
-        print(f"{r.id}  {r.created_at:%Y-%m-%d %H:%M}  {r.page_count:>3} pages  {r.keyword}")
+        print(f"{r.id}  {r.created_at:%Y-%m-%d %H:%M}  {r.page_count:>3} docs  {r.keyword}")
 
 
 def _confirm(prompt: str) -> bool:

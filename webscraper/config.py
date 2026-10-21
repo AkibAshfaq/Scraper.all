@@ -34,6 +34,9 @@ class Settings:
     respect_robots: bool = field(
         default_factory=lambda: _env("RESPECT_ROBOTS", "true").lower() == "true"
     )
+    # AI chat (Claude). Credentials come from ANTHROPIC_API_KEY or an `ant auth login` profile.
+    chat_model: str = field(default_factory=lambda: _env("CHAT_MODEL", "claude-opus-5-5"))
+    chat_effort: str = field(default_factory=lambda: _env("CHAT_EFFORT", "medium"))
     # Staged (unsaved) sessions older than this are purged automatically.
     staging_ttl_hours: int = field(default_factory=lambda: int(_env("STAGING_TTL_HOURS", "24")))
 
