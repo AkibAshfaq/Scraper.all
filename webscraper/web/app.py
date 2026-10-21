@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from webscraper import __version__
 from webscraper.container import Container, build_container
 from webscraper.exporters import available_formats
 from webscraper.fetching import FetchError
@@ -29,13 +30,16 @@ class SearchRequest(BaseModel):
 
 
 def create_app(container: Container | None = None) -> FastAPI:
-    app = FastAPI(title="Webscraper", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(
+        title="Webscraper", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json"
+    )
     c = container or build_container()
     c.sessions.purge_expired()
 
     @app.get("/api/config")
     def config() -> dict:
         return {
+            "version": __version__,
             "provider": c.settings.search_provider,
             "formats": available_formats(),
             "staging_ttl_hours": c.settings.staging_ttl_hours,

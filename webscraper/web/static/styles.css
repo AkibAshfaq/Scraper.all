@@ -71,6 +71,7 @@ button, input, select { font: inherit; color: inherit; }
   white-space: nowrap;
 }
 .brand svg { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; }
+.version { font-size: 12px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
 .search { display: flex; gap: 8px; flex: 1; max-width: 760px; }
 .search input {
   flex: 1; min-width: 0;

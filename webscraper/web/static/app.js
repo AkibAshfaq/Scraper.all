@@ -361,6 +361,7 @@ async function init() {
   try {
     state.config = await api("/api/config");
     $("provider-line").textContent = `Search providers: ${state.config.provider.split(",").join(" → ")}`;
+    $("version").textContent = `v${state.config.version}`;
   } catch {
     // UI still works without config; hints fall back to defaults.
   }

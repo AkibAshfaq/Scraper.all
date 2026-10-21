@@ -6,6 +6,7 @@ import argparse
 import logging
 import sys
 
+from webscraper import __version__
 from webscraper.container import Container, build_container
 from webscraper.exporters import available_formats
 from webscraper.models import ScrapedPage
@@ -16,6 +17,7 @@ from webscraper.storage import SessionSummary
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="webscraper", description="Scrape the web for a keyword.")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
+    parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("search", help="search a keyword, scrape results, stage them and export a file")

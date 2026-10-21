@@ -58,6 +58,12 @@ def test_export_download(client):
     assert client.get(f"/api/sessions/{session['id']}/export", params={"format": "xml"}).status_code == 400
 
 
+def test_config_reports_version(client):
+    from webscraper import __version__
+
+    assert client.get("/api/config").json()["version"] == __version__
+
+
 def test_validation_and_ui(client):
     assert client.post("/api/search", json={"keyword": ""}).status_code == 422
     assert client.post("/api/search", json={"keyword": "x", "limit": 999}).status_code == 422
