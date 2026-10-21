@@ -121,6 +121,37 @@ and `Exporter` interfaces, never on concrete adapters. Extending it:
 - **Site-specific extraction** — add a parser next to `parsing/html.py` and pick it in
   `ScrapeService._scrape` by domain.
 
+## Branching and versioning
+
+The repo uses **git flow** with [Semantic Versioning](https://semver.org/):
+
+| Branch | Purpose |
+|---|---|
+| `main` | released code only; every commit on it is tagged `vX.Y.Z` |
+| `develop` | integration branch for the next release |
+| `feature/<name>` | new work, branched from and merged back into `develop` |
+| `release/vX.Y.Z` | release prep from `develop`: version bump, changelog |
+| `hotfix/vX.Y.Z` | urgent fix branched from `main` |
+
+The version lives in one place, `webscraper/__init__.py` (`pyproject.toml` reads it).
+Note user-facing changes under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) as you go.
+
+Releasing:
+
+```bash
+git switch -c release/v0.2.0 develop
+python scripts/bump_version.py 0.2.0          # or: major | minor | patch
+git commit -am "Bump version to 0.2.0"
+git switch main && git merge --no-ff release/v0.2.0
+git tag -a v0.2.0 -m "v0.2.0"
+git switch develop && git merge --no-ff release/v0.2.0
+git branch -d release/v0.2.0
+git push origin main develop v0.2.0
+```
+
+The `gitflow.*` config keys are set, so `git flow release start 0.2.0` etc. also work if
+you install the git-flow CLI.
+
 ## Tests
 
 ```bash
