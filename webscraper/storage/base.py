@@ -13,7 +13,7 @@ class SessionSummary:
     keyword: str
     provider: str
     created_at: datetime
-    page_count: int
+    page_count: int  # successfully scraped pages only
 
 
 class SessionRepository(ABC):

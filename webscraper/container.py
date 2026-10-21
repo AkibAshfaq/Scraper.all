@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from webscraper.ai.anthropic_model import AnthropicChatModel
 from webscraper.config import Settings
 from webscraper.fetching import HttpFetcher
 from webscraper.search import create_provider
-from webscraper.services import ScrapeService, SessionService
+from webscraper.services import ChatService, ScrapeService, SessionService
 from webscraper.storage import SQLiteSessionRepository
 
 
@@ -16,6 +17,7 @@ class Container:
     settings: Settings
     scraper: ScrapeService
     sessions: SessionService
+    chat: ChatService | None = None
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -43,4 +45,5 @@ def build_container(settings: Settings | None = None) -> Container:
             output_dir=settings.output_dir,
             staging_ttl_hours=settings.staging_ttl_hours,
         ),
+        chat=ChatService(AnthropicChatModel(model=settings.chat_model, effort=settings.chat_effort)),
     )

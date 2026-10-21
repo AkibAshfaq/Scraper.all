@@ -47,8 +47,8 @@
       <section id="welcome" class="empty">
         <h1>Search the web for any keyword</h1>
         <p>Each search scrapes the result pages, keeps them in a <strong>temporary</strong> database,
-          and writes a JSON file. Review the documents, then choose <strong>Save to database</strong>
-          to keep them permanently.</p>
+          and writes a JSON file. Review the documents, ask the AI for a summary, then choose
+          <strong>Save to database</strong> to keep them permanently.</p>
         <p id="provider-line" class="muted"></p>
       </section>
 
@@ -59,19 +59,50 @@
             <p id="session-meta" class="muted"></p>
           </div>
           <div class="actions">
+            <button id="summary-btn" class="btn accent-quiet">✦ AI summary</button>
             <button id="save-btn" class="btn primary">Save to database</button>
             <button id="discard-btn" class="btn danger-quiet">Discard</button>
             <a id="dl-json" class="btn" download>JSON</a>
             <a id="dl-csv" class="btn" download>CSV</a>
           </div>
         </div>
-        <div class="filter-row">
-          <label class="visually-hidden" for="filter">Filter documents</label>
-          <input id="filter" type="search" placeholder="Filter documents by text…">
-          <label class="check"><input id="hide-failed" type="checkbox"> Hide failed</label>
+
+        <div class="view-tabs" role="tablist" aria-label="Session views">
+          <button role="tab" id="tab-docs" class="vtab" data-view="docs" aria-selected="true" aria-controls="docs-pane">
+            Documents <span id="docs-count" class="count"></span>
+          </button>
+          <button role="tab" id="tab-chat" class="vtab" data-view="chat" aria-selected="false" aria-controls="chat-pane">
+            ✦ Ask AI
+          </button>
         </div>
-        <ol id="doc-list" class="doc-list"></ol>
-        <p id="doc-empty" class="muted center" hidden>No documents match the filter.</p>
+
+        <div id="docs-pane" role="tabpanel" aria-labelledby="tab-docs">
+          <div class="filter-row">
+            <label class="visually-hidden" for="filter">Filter documents</label>
+            <input id="filter" type="search" placeholder="Filter documents by text…">
+          </div>
+          <ol id="doc-list" class="doc-list"></ol>
+          <p id="doc-empty" class="muted center" hidden>No documents match the filter.</p>
+        </div>
+
+        <div id="chat-pane" class="chat" role="tabpanel" aria-labelledby="tab-chat" hidden>
+          <div id="chat-empty" class="chat-empty">
+            <p>Ask questions about these documents, or get a detailed summary.
+              Answers cite their sources like <span class="cite static">2</span> — click one to open that document.</p>
+            <button id="summarize-btn" class="btn primary">Summarize these documents</button>
+            <div id="chat-suggestions" class="chips"></div>
+          </div>
+          <div id="chat-log" class="chat-log" aria-live="polite"></div>
+          <form id="chat-form" class="chat-form">
+            <label class="visually-hidden" for="chat-input">Message</label>
+            <textarea id="chat-input" rows="1" placeholder="Ask about these documents…" maxlength="20000"></textarea>
+            <button id="chat-send" class="btn primary" type="submit">Send</button>
+          </form>
+          <p class="chat-foot">
+            <span id="chat-model"></span> answers from the scraped documents. Check important facts against the sources.
+            <button id="chat-clear" type="button" class="link-btn" hidden>New chat</button>
+          </p>
+        </div>
       </section>
     </main>
 
@@ -83,7 +114,6 @@
       <div class="reader-body">
         <h2 id="reader-title"></h2>
         <a id="reader-url" class="url" target="_blank" rel="noopener noreferrer"></a>
-        <p id="reader-error" class="error-box" hidden></p>
         <p id="reader-desc" class="lede"></p>
         <details id="reader-headings-wrap" class="block">
           <summary>Headings <span id="reader-headings-count" class="count"></span></summary>

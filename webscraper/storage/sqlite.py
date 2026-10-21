@@ -100,7 +100,7 @@ class SQLiteSessionRepository(SessionRepository):
         with self._connect() as conn:
             rows = conn.execute(
                 """SELECT s.*, COUNT(p.id) AS page_count FROM sessions s
-                   LEFT JOIN pages p ON p.session_id = s.id
+                   LEFT JOIN pages p ON p.session_id = s.id AND p.error IS NULL
                    GROUP BY s.id ORDER BY s.created_at DESC"""
             ).fetchall()
         return [

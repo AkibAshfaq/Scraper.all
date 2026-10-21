@@ -69,3 +69,4 @@ def test_validation_and_ui(client):
     assert client.post("/api/search", json={"keyword": "x", "limit": 999}).status_code == 422
     page = client.get("/")
     assert page.status_code == 200 and "Webscraper" in page.text
+    assert client.get("/app.js").headers["cache-control"] == "no-cache"

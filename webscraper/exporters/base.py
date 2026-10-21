@@ -44,7 +44,7 @@ class CsvExporter(Exporter):
         with path.open("w", newline="", encoding="utf-8-sig") as fh:
             writer = csv.DictWriter(fh, fieldnames=("keyword", *self.columns))
             writer.writeheader()
-            for page in session.pages:
+            for page in session.documents:
                 row = page.to_dict()
                 row["headings"] = " | ".join(page.headings)
                 writer.writerow({"keyword": session.keyword, **{c: row[c] for c in self.columns}})

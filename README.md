@@ -61,7 +61,31 @@ webscraper serve            # http://127.0.0.1:8000  (--host / --port to change)
 - Document list: every scraped page with rank, title, URL and snippet; keyword matches are
   highlighted, and you can filter by text or hide failed pages.
 - Reader: click a document to see its description, headings, full extracted text and links.
+- **Ask AI** tab / **✦ AI summary** button: a chat with Claude about the search's documents.
+  It writes detailed summaries and answers questions using only those documents, citing
+  them as numbered chips you can click to open the source.
 - Actions: **Save to database**, **Discard**, and download **JSON** / **CSV**.
+
+Only pages that were scraped successfully are shown, exported and sent to the AI.
+
+### AI chat setup
+
+The chat uses Claude through the official Anthropic SDK. Set an API key
+(from https://console.anthropic.com) before starting the server:
+
+```bash
+setx ANTHROPIC_API_KEY "sk-ant-..."     # Windows (new terminals)
+export ANTHROPIC_API_KEY="sk-ant-..."   # macOS/Linux
+```
+
+| Variable | Default |
+|---|---|
+| `WEBSCRAPER_CHAT_MODEL` | `claude-opus-5-5` |
+| `WEBSCRAPER_CHAT_EFFORT` | `medium` (`low` … `max`: depth vs. cost/latency) |
+
+The documents are sent once per question with prompt caching, so follow-up questions about
+the same search are cheaper. Very large searches are shortened evenly to about 600K
+characters, and the model is told when that happened.
 
 The same features are exposed as a JSON API (interactive docs at `/api/docs`):
 
@@ -72,6 +96,7 @@ The same features are exposed as a JSON API (interactive docs at `/api/docs`):
 | `GET` | `/api/sessions/{id}` | a search with all its documents |
 | `POST` | `/api/sessions/{id}/save` | move it to the permanent DB |
 | `DELETE` | `/api/sessions/{id}` | discard a staged search |
+| `POST` | `/api/sessions/{id}/chat` `{messages: [{role, content}]}` | AI reply, streamed as NDJSON `text` / `error` / `done` events |
 | `GET` | `/api/sessions/{id}/export?format=json\|csv` | download a file |
 
 ## Configuration
@@ -100,6 +125,8 @@ container.py           composition root: wires concrete classes from Settings
 services/              use cases
   scrape.py            keyword -> search -> fetch (thread pool) -> parse -> stage
   sessions.py          export, promote staging -> permanent, discard, purge
+  chat.py              documents -> prompt context, chat/summary replies
+ai/                    ChatModel interface + Claude adapter (anthropic_model.py)
 search/                SearchProvider interface, registry + fallback chain
                        (brave.py, duckduckgo.py, wikipedia.py)
 fetching/http.py       HTTP client: headers, retries/backoff, per-host throttling, robots.txt
