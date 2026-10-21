@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Webscraper</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='8' fill='none' stroke='%232f6f5e' stroke-width='3.5'/%3E%3Cpath d='M19 19l8 8' stroke='%232f6f5e' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="8"/><path d="M19 19l8 8"/></svg>
+      Webscraper
+    </a>
+    <form id="search-form" class="search" role="search" autocomplete="off">
+      <label class="visually-hidden" for="keyword">Keyword</label>
+      <input id="keyword" name="keyword" type="search" placeholder="Search any keyword…" required maxlength="200">
+      <label class="visually-hidden" for="limit">Number of results</label>
+      <select id="limit" name="limit" title="Number of results">
+        <option value="5">5 results</option>
+        <option value="10" selected>10 results</option>
+        <option value="20">20 results</option>
+        <option value="30">30 results</option>
+      </select>
+      <button id="search-btn" type="submit" class="btn primary">Search</button>
+    </form>
+  </header>
+
+  <div id="progress" class="progress" hidden>
+    <div class="progress-bar"></div>
+    <p id="progress-text">Searching and scraping pages…</p>
+  </div>
+
+  <div class="layout">
+    <aside class="sessions" aria-label="Search history">
+      <div class="tabs" role="tablist">
+        <button role="tab" class="tab" data-store="staged" aria-selected="true">Temporary</button>
+        <button role="tab" class="tab" data-store="saved" aria-selected="false">Saved</button>
+      </div>
+      <p id="store-hint" class="hint"></p>
+      <ul id="session-list" class="session-list"></ul>
+    </aside>
+
+    <main id="results" class="results">
+      <section id="welcome" class="empty">
+        <h1>Search the web for any keyword</h1>
+        <p>Each search scrapes the result pages, keeps them in a <strong>temporary</strong> database,
+          and writes a JSON file. Review the documents, then choose <strong>Save to database</strong>
+          to keep them permanently.</p>
+        <p id="provider-line" class="muted"></p>
+      </section>
+
+      <section id="session-view" hidden>
+        <div class="session-head">
+          <div>
+            <h1 id="session-title"></h1>
+            <p id="session-meta" class="muted"></p>
+          </div>
+          <div class="actions">
+            <button id="save-btn" class="btn primary">Save to database</button>
+            <button id="discard-btn" class="btn danger-quiet">Discard</button>
+            <a id="dl-json" class="btn" download>JSON</a>
+            <a id="dl-csv" class="btn" download>CSV</a>
+          </div>
+        </div>
+        <div class="filter-row">
+          <label class="visually-hidden" for="filter">Filter documents</label>
+          <input id="filter" type="search" placeholder="Filter documents by text…">
+          <label class="check"><input id="hide-failed" type="checkbox"> Hide failed</label>
+        </div>
+        <ol id="doc-list" class="doc-list"></ol>
+        <p id="doc-empty" class="muted center" hidden>No documents match the filter.</p>
+      </section>
+    </main>
+
+    <article id="reader" class="reader" aria-live="polite" hidden>
+      <div class="reader-bar">
+        <span id="reader-rank" class="rank"></span>
+        <button id="reader-close" class="icon-btn" aria-label="Close document">&times;</button>
+      </div>
+      <div class="reader-body">
+        <h2 id="reader-title"></h2>
+        <a id="reader-url" class="url" target="_blank" rel="noopener noreferrer"></a>
+        <p id="reader-error" class="error-box" hidden></p>
+        <p id="reader-desc" class="lede"></p>
+        <details id="reader-headings-wrap" class="block">
+          <summary>Headings <span id="reader-headings-count" class="count"></span></summary>
+          <ul id="reader-headings" class="headings"></ul>
+        </details>
+        <h3 class="section-label">Content</h3>
+        <div id="reader-content" class="content"></div>
+        <details id="reader-links-wrap" class="block">
+          <summary>Links <span id="reader-links-count" class="count"></span></summary>
+          <ul id="reader-links" class="links"></ul>
+        </details>
+      </div>
+    </article>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

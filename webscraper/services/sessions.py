@@ -43,10 +43,15 @@ class SessionService:
         return self.staging.delete(session_id)
 
     def find(self, session_id: str) -> ScrapeSession:
-        session = self.staging.get(session_id) or self.permanent.get(session_id)
-        if session is None:
-            raise SessionNotFound(f"No session with id {session_id!r}")
-        return session
+        return self.locate(session_id)[0]
+
+    def locate(self, session_id: str) -> tuple[ScrapeSession, str]:
+        """Return the session and which store holds it: "staged" or "saved"."""
+        for store, repo in (("staged", self.staging), ("saved", self.permanent)):
+            session = repo.get(session_id)
+            if session is not None:
+                return session, store
+        raise SessionNotFound(f"No session with id {session_id!r}")
 
     def list_staged(self) -> list[SessionSummary]:
         return self.staging.list()

@@ -50,6 +50,30 @@ Skip the prompt with `--save` or `--no-save`. Unsaved runs are purged from stagi
 
 `python -m webscraper ...` works too, without installing.
 
+## Web UI
+
+```bash
+webscraper serve            # http://127.0.0.1:8000  (--host / --port to change)
+```
+
+- Search bar: keyword + number of results. Each search is staged and written to a JSON file.
+- Sidebar: **Temporary** and **Saved** searches.
+- Document list: every scraped page with rank, title, URL and snippet; keyword matches are
+  highlighted, and you can filter by text or hide failed pages.
+- Reader: click a document to see its description, headings, full extracted text and links.
+- Actions: **Save to database**, **Discard**, and download **JSON** / **CSV**.
+
+The same features are exposed as a JSON API (interactive docs at `/api/docs`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/search` `{keyword, limit}` | scrape a keyword (staged) |
+| `GET` | `/api/sessions?store=staged\|saved` | list searches |
+| `GET` | `/api/sessions/{id}` | a search with all its documents |
+| `POST` | `/api/sessions/{id}/save` | move it to the permanent DB |
+| `DELETE` | `/api/sessions/{id}` | discard a staged search |
+| `GET` | `/api/sessions/{id}/export?format=json\|csv` | download a file |
+
 ## Configuration
 
 Environment variables (all optional):
@@ -71,6 +95,7 @@ Environment variables (all optional):
 
 ```
 cli.py                 presentation: arguments, prompts, output
+web/                   presentation: FastAPI JSON API + static UI (index.html, app.js)
 container.py           composition root: wires concrete classes from Settings
 services/              use cases
   scrape.py            keyword -> search -> fetch (thread pool) -> parse -> stage

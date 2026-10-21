@@ -38,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     e = sub.add_parser("export", help="export a staged or saved session to a file")
     e.add_argument("session_id")
     e.add_argument("-f", "--format", choices=available_formats(), default="json")
+
+    w = sub.add_parser("serve", help="start the web UI")
+    w.add_argument("--host", default="127.0.0.1")
+    w.add_argument("--port", type=int, default=8000)
     return parser
 
 
@@ -117,6 +121,16 @@ def cmd_export(app: Container, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(app: Container, args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from webscraper.web import create_app
+
+    print(f"Webscraper UI running at http://{args.host}:{args.port}  (Ctrl+C to stop)")
+    uvicorn.run(create_app(app), host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
 COMMANDS = {
     "search": cmd_search,
     "staged": cmd_staged,
@@ -124,6 +138,7 @@ COMMANDS = {
     "save": cmd_save,
     "discard": cmd_discard,
     "export": cmd_export,
+    "serve": cmd_serve,
 }
 
 
